@@ -40,7 +40,7 @@ All those examples are already good for usage as they provide advanced edition f
 
 ## Community
 
-Contributions are highly welcome. [See how](https://projects.eclipse.org/projects/technology.lsp4e/developer}
+Contributions are highly welcome. [See how](https://projects.eclipse.org/projects/technology.lsp4e/developer)
 
 ## Related projects
 
