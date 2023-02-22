@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
@@ -70,16 +71,17 @@ public abstract class LanguageServers<E extends LanguageServers<E>> {
 	 *
 	 * @return Async result
 	 */
-	@NonNull
-	public <T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(BiFunction<? super LanguageServerWrapper, LanguageServer, ? extends CompletableFuture<T>> fn) {
-		computeVersion();
-		final CompletableFuture<@NonNull List<T>> init = CompletableFuture.completedFuture(new ArrayList<T>());
-		return executeOnServers(fn).reduce(init, LanguageServers::add, LanguageServers::addAll)
-			// Ensure any subsequent computation added by caller does not block further incoming messages from language servers
-			.thenApplyAsync(Function.identity());
+	public <T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(BiFunction<? super LanguageServerWrapper, LanguageServer, ? extends CompletionStage<T>> fn) {
+		return collectAll(fn, (wrapper, response) -> response);
 	}
 
-
+	public <R, T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(BiFunction<? super LanguageServerWrapper, LanguageServer, ? extends CompletionStage<R>> request, BiFunction<LanguageServerWrapper, R, T> mapper) {
+		computeVersion();
+		final CompletableFuture<@NonNull List<R>> init = CompletableFuture.completedFuture(new ArrayList<R>());
+		return executeOnServers(request).reduce(init, LanguageServers::add, LanguageServers::addAll)
+			// Ensure any subsequent computation added by caller does not block further incoming messages from language servers
+			.thenApplyAsync(responses -> responses.stream().map(mapper).toList());
+	}
 	/**
 	 * Runs an operation on all applicable language servers, returning a list of asynchronous responses that can
 	 * be used to instigate further processing as they complete individually
@@ -153,6 +155,7 @@ public abstract class LanguageServers<E extends LanguageServers<E>> {
 		// a quickly-returned null to trump a slowly-returned result
 		CompletableFuture.allOf(
 				executeOnServers(fn)
+				.map(Entry::getValue)
 				.map(cf -> cf.thenApply(t -> {
 					if (!isEmpty(t)) { // TODO: Does this need to be a supplied function to handle all cases?
 						result.complete(Optional.of(t));

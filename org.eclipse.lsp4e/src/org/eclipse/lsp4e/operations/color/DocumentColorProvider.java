@@ -57,15 +57,12 @@ public class DocumentColorProvider extends AbstractCodeMiningProvider {
 		if (docURI != null) {
 			final var textDocumentIdentifier = LSPEclipseUtils.toTextDocumentIdentifier(docURI);
 			final var param = new DocumentColorParams(textDocumentIdentifier);
-			return LanguageServers.forDocument(document)
+			CompletableFuture<?> request = LanguageServers.forDocument(document)
 				.withFilter(DocumentColorProvider::isColorProvider)
-				.collectAll(
-					// Need to do some of the result processing inside the function we supply to collectAll(...)
-					// as need the LSW to construct the ColorInformationMining
-					(wrapper, ls) -> ls.getTextDocumentService().documentColor(param)
-								.thenApply(colors -> LanguageServers.streamSafely(colors)
-										.map(color -> toMining(color, document, textDocumentIdentifier, wrapper))))
-				.thenApply(res -> res.stream().flatMap(Function.identity()).filter(Objects::nonNull).toList());
+				.collectAll((wrapper, ls) -> ls.getTextDocumentService().documentColor(param),
+						(wrapper, colors) -> LanguageServers.streamSafely(colors)
+										.map(color -> toMining(color, document, textDocumentIdentifier, wrapper)));
+			return request.thenApply(res -> res.stream().flatMap(Function.identity()).filter(Objects::nonNull).toList());
 		} else {
 			return null;
 		}
