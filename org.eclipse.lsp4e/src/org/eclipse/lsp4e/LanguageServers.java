@@ -19,10 +19,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -56,7 +58,15 @@ public abstract class LanguageServers<E extends LanguageServers<E>> {
 	 */
 	@NonNull
 	public <T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(Function<LanguageServer, ? extends CompletableFuture<T>> fn) {
-		return collectAll((w, ls) -> fn.apply(ls));
+		return collectAll(fn, (wrapper, lsResult) -> lsResult);
+	}
+
+	@NonNull
+	public <LS_RESULT, T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(Function<LanguageServer, ? extends CompletableFuture<LS_RESULT>> request, BiFunction<LanguageServerWrapper, LS_RESULT, T> mapper) {
+		final CompletableFuture<@NonNull List<T>> init = CompletableFuture.completedFuture(new ArrayList<T>());
+		return executeOnServers((wrapper, ls) -> request.apply(ls), mapper).reduce(init, LanguageServers::add, LanguageServers::addAll)
+			// Ensure any subsequent computation added by caller does not block further incoming messages from language servers
+			.thenApplyAsync(responses -> responses.stream().toList());
 	}
 
 	/**
@@ -71,16 +81,16 @@ public abstract class LanguageServers<E extends LanguageServers<E>> {
 	 *
 	 * @return Async result
 	 */
-	public <T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(BiFunction<? super LanguageServerWrapper, LanguageServer, ? extends CompletionStage<T>> fn) {
+	public <T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(BiFunction<LanguageServerWrapper, LanguageServer, ? extends CompletableFuture<T>> fn) {
 		return collectAll(fn, (wrapper, response) -> response);
 	}
 
-	public <R, T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(BiFunction<? super LanguageServerWrapper, LanguageServer, ? extends CompletionStage<R>> request, BiFunction<LanguageServerWrapper, R, T> mapper) {
+	public <R, T> CompletableFuture<@NonNull List<@NonNull T>> collectAll(BiFunction<LanguageServerWrapper, LanguageServer, ? extends CompletableFuture<R>> request, BiFunction<LanguageServerWrapper, R, T> mapper) {
 		computeVersion();
-		final CompletableFuture<@NonNull List<R>> init = CompletableFuture.completedFuture(new ArrayList<R>());
-		return executeOnServers(request).reduce(init, LanguageServers::add, LanguageServers::addAll)
+		final CompletableFuture<@NonNull List<T>> init = CompletableFuture.completedFuture(new ArrayList<T>());
+		return executeOnServers(request, mapper).reduce(init, LanguageServers::add, LanguageServers::addAll)
 			// Ensure any subsequent computation added by caller does not block further incoming messages from language servers
-			.thenApplyAsync(responses -> responses.stream().map(mapper).toList());
+			.thenApplyAsync(responses -> responses.stream().toList());
 	}
 	/**
 	 * Runs an operation on all applicable language servers, returning a list of asynchronous responses that can
@@ -145,6 +155,21 @@ public abstract class LanguageServers<E extends LanguageServers<E>> {
 	 * @return An asynchronous result that will complete with a populated <code>Optional&lt;T&gt;</code> from the first
 	 * non-empty response, and with an empty <code>Optional</code> if none of the servers returned a non-empty result.
 	 */
+	public <LS_RESPONSE, T> CompletableFuture<Optional<T>> computeFirst(Function<LanguageServer, ? extends CompletionStage<LS_RESPONSE>> lsRequestor, BiFunction<LanguageServerWrapper, LS_RESPONSE, T> mapper) {
+	}
+
+	/**
+	 * Runs an operation on all applicable language servers, returning an async result that will receive the first
+	 * non-null response
+	 * @param <T> Type of result being computed on the language server(s)
+	 * @param fn An individual operation to be performed on the language server, which following the LSP4j API
+	 * will return a <code>CompletableFuture&lt;T&gt;</code>. This function additionally receives a {@link LanguageServerWrapper }
+	 * allowing fine-grained interrogation of server capabilities, or the construction of objects that can use this
+	 * handle to make further calls on the same server
+	 *
+	 * @return An asynchronous result that will complete with a populated <code>Optional&lt;T&gt;</code> from the first
+	 * non-empty response, and with an empty <code>Optional</code> if none of the servers returned a non-empty result.
+	 */
 	public <T> CompletableFuture<Optional<T>> computeFirst(BiFunction<? super LanguageServerWrapper, LanguageServer, ? extends CompletableFuture<T>> fn) {
 		computeVersion();
 		final CompletableFuture<Optional<T>> result = new CompletableFuture<>();
@@ -155,7 +180,6 @@ public abstract class LanguageServers<E extends LanguageServers<E>> {
 		// a quickly-returned null to trump a slowly-returned result
 		CompletableFuture.allOf(
 				executeOnServers(fn)
-				.map(Entry::getValue)
 				.map(cf -> cf.thenApply(t -> {
 					if (!isEmpty(t)) { // TODO: Does this need to be a supplied function to handle all cases?
 						result.complete(Optional.of(t));
@@ -420,12 +444,57 @@ public abstract class LanguageServers<E extends LanguageServers<E>> {
 		});
 	}
 
+	/**
+	 *
+	 * @param <T>
+	 * @param fn
+	 * @return
+	 * @deprecated Prefer {@link #executeOnServers(Function, BiFunction)}
+	 */
+	@Deprecated(forRemoval = true)
 	@NonNull
 	private <T> Stream<CompletableFuture<T>> executeOnServers(
 			BiFunction<? super LanguageServerWrapper, LanguageServer, ? extends CompletableFuture<T>> fn) {
 		return getServers().stream().map(cf -> cf.thenCompose(
 				w -> w == null ? CompletableFuture.completedFuture((T) null) : w.executeImpl(ls -> fn.apply(w, ls)
 		)));
+	}
+
+	/**
+	 * Trigger requested query against all related servers; and returns result after processing the mapper
+	 * @param <LS_RESULT> The response type from language server query
+	 * @param <T> The final type desired by consumer
+	 * @param lsRequestor operation to query the language server
+	 * @param mapper transform the LS output
+	 * @return the futures for available language servers. Cancelling these futures will cancel the
+	 * LSP query (send cancel event), if {@link LanguageServerWrapper#executeImpl(Function)} supports it.
+	 */
+	@NonNull
+	private <LS_RESULT, T> Stream<CompletableFuture<T>> executeOnServers(BiFunction<LanguageServerWrapper, LanguageServer, ? extends CompletableFuture<LS_RESULT>> lsRequestor, BiFunction<LanguageServerWrapper, LS_RESULT, T> mapper) {
+		return getServers().stream().map(cf -> {
+			AtomicReference<CompletableFuture<LS_RESULT>> lsRequestFuture = new AtomicReference<>();
+			CompletableFuture<T> res = cf.thenCompose(wrapper -> {
+				if (wrapper == null) {
+					return CompletableFuture.completedFuture((T) null);
+				}
+				CompletableFuture<LS_RESULT> request = wrapper.executeImpl(ls -> {
+					CompletableFuture<LS_RESULT> future = lsRequestor.apply(wrapper, ls);
+					lsRequestFuture.set(future);
+					return future;
+				});
+				return request.thenApplyAsync(lsResponse -> mapper.apply(wrapper, lsResponse));
+			});
+			res.exceptionally(throwable -> {
+				if (throwable instanceof CancellationException) {
+					CompletableFuture<LS_RESULT> lsRequest = lsRequestFuture.get();
+					if (lsRequest != null) {
+						lsRequest.cancel(false);
+					}
+				}
+				return null;
+			});
+			return res;
+		});
 	}
 
 	/*
