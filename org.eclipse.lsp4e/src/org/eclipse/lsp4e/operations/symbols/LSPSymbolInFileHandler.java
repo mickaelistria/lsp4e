@@ -48,7 +48,7 @@ public class LSPSymbolInFileHandler extends AbstractHandler {
 			// TODO maybe consider better strategy such as iterating on all LS until we have
 			// a good result
 			LanguageServers.forDocument(document).withCapability(ServerCapabilities::getDocumentSymbolProvider)
-					.computeFirst((w, ls) -> CompletableFuture.completedFuture(w))
+					.computeFirst(ls -> CompletableFuture.completedFuture(null), (w, res) -> w)
 					.thenAcceptAsync(oW -> oW.ifPresent(w -> {
 						if (w != null) {
 							new LSPSymbolInFileDialog(shell, textEditor, document, w).open();

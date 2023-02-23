@@ -108,7 +108,7 @@ public class LSPRenameProcessor extends RefactoringProcessor {
 
 			Optional<Pair<LanguageServerWrapper, Either3<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>> tmp
 				= LanguageServers.forDocument(document).withFilter(LSPRenameProcessor::isPrepareRenameProvider)
-				.computeFirst((w, ls) -> ls.getTextDocumentService().prepareRename(params).thenApply(result -> new Pair<>(w, result)))
+				.computeFirst(ls -> ls.getTextDocumentService().prepareRename(params), (w, result) -> new Pair<>(w, result))
 				.get(1000, TimeUnit.MILLISECONDS);
 
 			if (tmp.isEmpty() || tmp.get().getSecond() == null) {

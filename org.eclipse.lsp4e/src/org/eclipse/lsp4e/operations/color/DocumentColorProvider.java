@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.jdt.annotation.NonNull;
@@ -57,9 +58,9 @@ public class DocumentColorProvider extends AbstractCodeMiningProvider {
 		if (docURI != null) {
 			final var textDocumentIdentifier = LSPEclipseUtils.toTextDocumentIdentifier(docURI);
 			final var param = new DocumentColorParams(textDocumentIdentifier);
-			CompletableFuture<?> request = LanguageServers.forDocument(document)
+			CompletableFuture<List<Stream<ColorInformationMining>>> request = LanguageServers.forDocument(document)
 				.withFilter(DocumentColorProvider::isColorProvider)
-				.collectAll((wrapper, ls) -> ls.getTextDocumentService().documentColor(param),
+				.collectAll(ls -> ls.getTextDocumentService().documentColor(param),
 						(wrapper, colors) -> LanguageServers.streamSafely(colors)
 										.map(color -> toMining(color, document, textDocumentIdentifier, wrapper)));
 			return request.thenApply(res -> res.stream().flatMap(Function.identity()).filter(Objects::nonNull).toList());

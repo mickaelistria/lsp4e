@@ -12,6 +12,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -37,11 +38,11 @@ public class CodeLensProvider extends AbstractCodeMiningProvider {
 			final var param = new CodeLensParams(LSPEclipseUtils.toTextDocumentIdentifier(docURI));
 			LanguageServerDocumentExecutor executor = LanguageServers.forDocument(document)
 					.withFilter(sc -> sc.getCodeLensProvider() != null);
-			return executor.collectAll((w, ls) -> ls.getTextDocumentService().codeLens(param)
-								.thenApply(codeLenses -> LanguageServers.streamSafely(codeLenses)
+			return executor.collectAll(ls -> ls.getTextDocumentService().codeLens(param),
+					(w, codeLenses) -> LanguageServers.streamSafely(codeLenses)
 										.map(codeLens -> toCodeMining(document, w, codeLens))
-										.filter(Objects::nonNull)))
-				.thenApply(result -> result.stream().flatMap(s -> s).collect(Collectors.toList()));
+										.filter(Objects::nonNull))
+				.thenApply(result -> result.stream().flatMap(Function.identity()).collect(Collectors.toList()));
 		}
 		else {
 			return null;

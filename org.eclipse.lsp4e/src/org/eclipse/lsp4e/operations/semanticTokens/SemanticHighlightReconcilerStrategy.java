@@ -252,9 +252,9 @@ public class SemanticHighlightReconcilerStrategy
 			LanguageServerDocumentExecutor executor = LanguageServers.forDocument(theDocument)
 					.withFilter(this::hasSemanticTokensFull);
 			semanticTokensFullFuture = executor//
-					.computeFirst((w, ls) -> ls.getTextDocumentService().semanticTokensFull(getSemanticTokensParams())//
-							.thenApply(semanticTokens -> VersionedSemanticTokens.toVersionedSemantikTokens(executor,
-									semanticTokens, getSemanticTokensLegend(w))));
+					.computeFirst(ls -> ls.getTextDocumentService().semanticTokensFull(getSemanticTokensParams()), //
+							(w, semanticTokens) -> VersionedSemanticTokens.toVersionedSemantikTokens(executor,
+									semanticTokens, getSemanticTokensLegend(w)));
 
 			try {
 				semanticTokensFullFuture.get() // background thread with cancellation support, no timeout needed

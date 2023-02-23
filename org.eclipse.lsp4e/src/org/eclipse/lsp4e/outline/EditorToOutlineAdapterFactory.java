@@ -62,7 +62,7 @@ public class EditorToOutlineAdapterFactory implements IAdapterFactory {
 				if (document != null) {
 					CompletableFuture<Optional<LanguageServerWrapper>> languageServer = LanguageServers.forDocument(document)
 							.withFilter(capabilities -> LSPEclipseUtils
-									.hasCapability(capabilities.getDocumentSymbolProvider())).computeFirst((w,ls) -> CompletableFuture.completedFuture(w));
+									.hasCapability(capabilities.getDocumentSymbolProvider())).computeFirst(ls -> CompletableFuture.completedFuture(null), (w, res) -> w);
 					try {
 						return languageServer.get(50, TimeUnit.MILLISECONDS).filter(Objects::nonNull)
 								.filter(LanguageServerWrapper::isActive)

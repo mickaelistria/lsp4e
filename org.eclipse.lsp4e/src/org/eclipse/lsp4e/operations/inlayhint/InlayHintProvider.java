@@ -49,15 +49,17 @@ public class InlayHintProvider extends AbstractCodeMiningProvider {
 			InlayHintParams param = new InlayHintParams(LSPEclipseUtils.toTextDocumentIdentifier(docURI), viewPortRange);
 			List<LSPLineContentCodeMining> inlayHintResults = Collections.synchronizedList(new ArrayList<>());
 			return LanguageServers.forDocument(document).withCapability(ServerCapabilities::getInlayHintProvider)
-					.collectAll((w, ls) -> ls.getTextDocumentService().inlayHint(param).thenAcceptAsync(inlayHints -> {
-						// textDocument/inlayHint may return null
-						if (inlayHints != null) {
-							inlayHints.stream().filter(Objects::nonNull)
-									.map(inlayHint -> toCodeMining(document, w, inlayHint))
-									.filter(Objects::nonNull)
-									.forEach(inlayHintResults::add);
-						}
-					})).thenApplyAsync(theVoid -> inlayHintResults);
+					.collectAll(ls -> ls.getTextDocumentService().inlayHint(param),
+							(wrapper, inlayHints) -> {
+								// textDocument/inlayHint may return null
+								if (inlayHints != null) {
+									inlayHints.stream().filter(Objects::nonNull)
+											.map(inlayHint -> toCodeMining(document, wrapper, inlayHint))
+											.filter(Objects::nonNull)
+											.forEach(inlayHintResults::add);
+								}
+								return null;
+					}).thenApplyAsync(theVoid -> inlayHintResults);
 		} else {
 			return null;
 		}
