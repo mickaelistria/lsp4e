@@ -49,6 +49,7 @@ import org.eclipse.lsp4j.DidSaveTextDocumentParams;
 import org.eclipse.lsp4j.DocumentHighlight;
 import org.eclipse.lsp4j.DocumentLink;
 import org.eclipse.lsp4j.DocumentLinkOptions;
+import org.eclipse.lsp4j.DocumentOnTypeFormattingOptions;
 import org.eclipse.lsp4j.DocumentSymbol;
 import org.eclipse.lsp4j.ExecuteCommandOptions;
 import org.eclipse.lsp4j.FoldingRange;
@@ -187,6 +188,7 @@ public class MockLanguageServer implements LanguageServer {
 		capabilities.setLinkedEditingRangeProvider(new LinkedEditingRangeRegistrationOptions());
 		capabilities.setTypeHierarchyProvider(new TypeHierarchyRegistrationOptions());
 		capabilities.setFoldingRangeProvider(new FoldingRangeProviderOptions());
+		capabilities.setDocumentOnTypeFormattingProvider(new DocumentOnTypeFormattingOptions(";", List.of("\n", "}")));
 		return capabilities;
 	}
 

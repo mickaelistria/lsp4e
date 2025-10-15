@@ -20,8 +20,10 @@ import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -75,6 +77,7 @@ import org.eclipse.lsp4j.SignatureHelp;
 import org.eclipse.lsp4j.SignatureHelpParams;
 import org.eclipse.lsp4j.SymbolInformation;
 import org.eclipse.lsp4j.SymbolKind;
+import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.TextEdit;
 import org.eclipse.lsp4j.TypeDefinitionParams;
 import org.eclipse.lsp4j.TypeHierarchyItem;
@@ -119,6 +122,7 @@ public class MockTextDocumentService implements TextDocumentService {
 	private SemanticTokens mockSemanticTokens;
 	private List<FoldingRange> foldingRanges;
 	public int codeActionRequests = 0;
+	private Map<String, String> contents = new HashMap<>();
 
 	public <U> MockTextDocumentService(Function<U, CompletableFuture<U>> futureFactory) {
 		this._futureFactory = futureFactory;
@@ -256,7 +260,27 @@ public class MockTextDocumentService implements TextDocumentService {
 
 	@Override
 	public CompletableFuture<List<? extends TextEdit>> onTypeFormatting(DocumentOnTypeFormattingParams params) {
+		if (Set.of(";", "}").contains(params.getCh())) {
+			String indentedNewLine = "\n";
+			String currentLine = getLineContent(params.getTextDocument(), params.getPosition().getLine());
+			int i = 0;
+			while (i < currentLine.length() && Set.of(' ', '\t').contains(currentLine.charAt(i))) {
+				indentedNewLine += currentLine.charAt(i);
+				i++;
+			}
+			var res = new TextEdit(new Range(params.getPosition(), params.getPosition()), indentedNewLine);
+			return CompletableFuture.completedFuture(List.of(res));
+		}
 		return CompletableFuture.completedFuture(null);
+	}
+
+	private String getLineContent(TextDocumentIdentifier textDocument, int line) {
+		String doc = this.contents.get(textDocument.getUri());
+		if (doc == null) {
+			return "";
+		}
+		String[] lines = doc.split("\n");
+		return lines[line];
 	}
 
 	@Override
@@ -301,11 +325,13 @@ public class MockTextDocumentService implements TextDocumentService {
 
 	@Override
 	public void didChange(DidChangeTextDocumentParams params) {
+		this.contents.put(params.getTextDocument().getUri(), params.getContentChanges().get(0).getText());
 		this.didChangeEvents.add(params);
 	}
 
 	@Override
 	public void didClose(DidCloseTextDocumentParams params) {
+		this.contents.remove(params.getTextDocument().getUri());
 		if (didCloseCallback != null) {
 			didCloseCallback.complete(params);
 			didCloseCallback = null;
