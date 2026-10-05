@@ -29,6 +29,8 @@ import org.eclipse.lsp4j.CompletionItemInsertTextModeSupportCapabilities;
 import org.eclipse.lsp4j.CompletionItemResolveSupportCapabilities;
 import org.eclipse.lsp4j.CompletionListCapabilities;
 import org.eclipse.lsp4j.DefinitionCapabilities;
+import org.eclipse.lsp4j.DiagnosticCapabilities;
+import org.eclipse.lsp4j.DiagnosticWorkspaceCapabilities;
 import org.eclipse.lsp4j.DidChangeWatchedFilesCapabilities;
 import org.eclipse.lsp4j.DocumentHighlightCapabilities;
 import org.eclipse.lsp4j.DocumentLinkCapabilities;
@@ -92,6 +94,7 @@ public class SupportedFeatures {
 		textDocumentClientCapabilities.setInlayHint(new InlayHintCapabilities());
 		textDocumentClientCapabilities.setColorProvider(new ColorProviderCapabilities());
 		textDocumentClientCapabilities.setPublishDiagnostics(new PublishDiagnosticsCapabilities());
+		textDocumentClientCapabilities.setDiagnostic(new DiagnosticCapabilities(true));
 		final var completionItemCapabilities = new CompletionItemCapabilities(true);
 		completionItemCapabilities.setDocumentationFormat(List.of( //
 				MarkupKind.MARKDOWN, //
@@ -170,6 +173,7 @@ public class SupportedFeatures {
 		symbolCapabilities.setTagSupport(new SymbolTagSupportCapabilities(List.of(SymbolTag.values())));
 		workspaceClientCapabilities.setSymbol(symbolCapabilities);
 		workspaceClientCapabilities.setWorkspaceFolders(true);
+		workspaceClientCapabilities.setDiagnostics(new DiagnosticWorkspaceCapabilities(true));
 
 		final var editCapabilities = new WorkspaceEditCapabilities();
 		editCapabilities.setDocumentChanges(true);

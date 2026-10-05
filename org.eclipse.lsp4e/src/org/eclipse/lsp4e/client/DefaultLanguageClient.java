@@ -49,6 +49,7 @@ import org.eclipse.lsp4j.ShowDocumentResult;
 import org.eclipse.lsp4j.ShowMessageRequestParams;
 import org.eclipse.lsp4j.UnregistrationParams;
 import org.eclipse.lsp4j.WorkDoneProgressCreateParams;
+import org.eclipse.lsp4j.WorkspaceDiagnosticParams;
 import org.eclipse.lsp4j.WorkspaceFolder;
 import org.eclipse.lsp4j.services.LanguageClient;
 import org.eclipse.lsp4j.services.LanguageServer;
@@ -182,7 +183,7 @@ public class DefaultLanguageClient implements LanguageClient {
 		for (IEditorReference ref : editors) {
 			var editor = ref.getEditor(false);
 			var textViewer = Adapters.adapt(editor, ITextViewer.class, true);
-			if (textViewer != null && textViewer instanceof SourceViewer sourceViewer) {
+			if (textViewer instanceof SourceViewer sourceViewer) {
 				sourceViewer.updateCodeMinings();
 			}
 		}
@@ -196,6 +197,19 @@ public class DefaultLanguageClient implements LanguageClient {
 	@Override
 	public CompletableFuture<@Nullable Void> refreshInlayHints() {
 		return CompletableFuture.runAsync(() -> UI.getDisplay().syncExec(this::updateCodeMinings));
+	}
+
+	@Override
+	public CompletableFuture<@Nullable Void> refreshDiagnostics() {
+		WorkspaceDiagnosticParams params = new WorkspaceDiagnosticParams();
+		return this.server.getWorkspaceService().diagnostic(params).thenAccept(reports ->
+			reports.getItems().forEach(report -> {
+				if (report.isLeft()) {
+					PublishDiagnosticsParams param = new PublishDiagnosticsParams(report.getLeft().getUri(), report.getLeft().getItems());
+					publishDiagnostics(param);
+				}
+			}
+		));
 	}
 
 	/**

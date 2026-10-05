@@ -639,6 +639,13 @@
             <reference definitionId="org.eclipse.lsp4e.editorHasLanguageServer" />
          </enabledWhen>
       </reconcilingStrategy>
+      <reconcilingStrategy
+            class="org.eclipse.lsp4e.operations.diagnostics.PullDiagnosticsReconcilingStrategy"
+            contentType="org.eclipse.core.runtime.text">
+         <enabledWhen>
+            <reference definitionId="org.eclipse.lsp4e.editorHasLanguageServer" />
+         </enabledWhen>
+      </reconcilingStrategy>
    </extension>
 
    <extension point="org.eclipse.ui.genericeditor.highlightReconcilers">
